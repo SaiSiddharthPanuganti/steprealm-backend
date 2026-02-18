@@ -45,7 +45,7 @@ def claim_tile(payload: ClaimTileRequest, current_user: User = Depends(get_curre
         extra={"user_id": current_user.id, "q": payload.q, "r": payload.r},
     )
     total_tiles_owned = 0
-    with db.begin():
+    try:
         user = db.query(User).filter(User.id == current_user.id).with_for_update().first()
         if not user:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
@@ -69,6 +69,10 @@ def claim_tile(payload: ClaimTileRequest, current_user: User = Depends(get_curre
             if college:
                 college.total_tiles += 1
         total_tiles_owned = db.query(func.count(HexTile.id)).filter(HexTile.owner_id == user.id).scalar() or 0
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
 
     db.refresh(user)
     db.refresh(tile)

@@ -12,7 +12,7 @@ router = APIRouter()
 
 @router.post("/join")
 def join_college(payload: JoinCollegeRequest, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> dict:
-    with db.begin():
+    try:
         college = db.query(College).filter(College.join_code == payload.join_code).first()
         if not college:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invalid join code")
@@ -22,6 +22,10 @@ def join_college(payload: JoinCollegeRequest, current_user: User = Depends(get_c
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
 
         user.college_id = college.id
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
 
     return {
         "college_id": college.id,

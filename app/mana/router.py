@@ -17,11 +17,15 @@ logger = logging.getLogger("steprealm.mana")
 @router.post("/sync")
 def sync_mana(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> dict:
     logger.info("mana_sync_requested", extra={"user_id": current_user.id})
-    with db.begin():
+    try:
         user = db.query(User).filter(User.id == current_user.id).with_for_update().first()
         if not user:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
         apply_passive_regen(user)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
 
     logger.info("mana_sync_completed", extra={"user_id": user.id, "mana": user.mana})
 
@@ -34,11 +38,15 @@ def sync_mana(current_user: User = Depends(get_current_user), db: Session = Depe
 @router.post("/add-steps")
 def add_steps(payload: AddStepsRequest, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> dict:
     enforce_rate_limit(scope="add_steps", subject_id=current_user.id, limit=6, window_seconds=60)
-    with db.begin():
+    try:
         user = db.query(User).filter(User.id == current_user.id).with_for_update().first()
         if not user:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
         awarded_mana = apply_step_bonus(user, payload.step_delta)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
 
     return {
         "mana": user.mana,
